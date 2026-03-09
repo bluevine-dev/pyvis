@@ -38,7 +38,8 @@ class Network(object):
                  font_color=False,
                  layout=None,
                  heading="",
-                 cdn_resources="local"):
+                 cdn_resources="local",
+                 external_cdn=None):
         """
         :param height: The height of the canvas
         :param width: The width of the canvas
@@ -49,10 +50,13 @@ class Network(object):
         :param filter_menu: sets the option to filter nodes and edges based on attributes
         :param bgcolor: The background color of the canvas.
         :param cdn_resources: Where to pull resources for css and js files. Defaults to local.
-            Options ['local','in_line','remote'].
+            Options ['local','in_line','remote','external'].
             local: pull resources from local lib folder.
             in_line: insert lib resources as inline script tags.
             remote: pull resources from hash checked cdns.
+            external: pull all resources from the base URL given by external_cdn.
+        :param external_cdn: Base URL for serving static assets when cdn_resources='external'.
+            All CSS/JS paths in the template will be prefixed with this URL.
         :font_color: The color of the node labels text
         :layout: Use hierarchical layout if this is set
 
@@ -88,7 +92,13 @@ class Network(object):
         self.neighborhood_highlight = neighborhood_highlight
         self.select_menu = select_menu
         self.filter_menu = filter_menu
-        assert cdn_resources in ["local", "in_line", "remote"], "cdn_resources not in [local, in_line, remote]."
+        assert cdn_resources in ["local", "in_line", "remote", "external"], "cdn_resources not in [local, in_line, remote, external]."
+        if cdn_resources == "external":
+            assert external_cdn is not None, "external_cdn must be provided when cdn_resources='external'."
+            # normalise: strip trailing slash so template can append /path
+            self.external_cdn = external_cdn.rstrip("/")
+        else:
+            self.external_cdn = None
         # path is the root template located in the template_dir
         self.path = "template.html"
         self.template_dir = os.path.dirname(__file__) + "/templates/"
@@ -464,6 +474,8 @@ class Network(object):
             template = self.templateEnv.get_template(self.path)  # Template(content)
         else:
             template = self.template
+            if template is None:
+                template = self.templateEnv.get_template(self.path)
 
         nodes, edges, heading, height, width, options = self.get_network_data()
 
@@ -493,7 +505,8 @@ class Network(object):
                                     select_menu=self.select_menu,
                                     filter_menu=self.filter_menu,
                                     notebook=notebook,
-                                    cdn_resources=self.cdn_resources
+                                    cdn_resources=self.cdn_resources,
+                                    external_cdn=self.external_cdn
                                     )
         return self.html
 
@@ -525,11 +538,11 @@ class Network(object):
                 shutil.copytree(f"{os.path.dirname(__file__)}/templates/lib/vis-9.1.2", "lib/vis-9.1.2")
             with open(getcwd_name, "w+") as out:
                 out.write(self.html)
-        elif self.cdn_resources == "in_line" or self.cdn_resources == "remote":
+        elif self.cdn_resources in ("in_line", "remote", "external"):
             with open(getcwd_name, "w+") as out:
                 out.write(self.html)
         else:
-            assert "cdn_resources is not in ['in_line','remote','local']."
+            assert False, "cdn_resources is not in ['in_line','remote','local','external']."
         if open_browser: # open the saved file in a new browser window.
             webbrowser.open(getcwd_name)
 
